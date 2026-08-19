@@ -1,0 +1,65 @@
+version: '3.9'
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: auth_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       auth_challenge
+      POSTGRES_USER:     postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Backend ─────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: auth_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST:               postgres
+      DB_PORT:               5432
+      DB_NAME:               auth_challenge
+      DB_USER:               postgres
+      DB_PASSWORD:           postgres
+      JWT_ACCESS_SECRET:     super_secret_access_key_2024_auth_challenge
+      JWT_REFRESH_SECRET:    super_secret_refresh_key_2024_auth_challenge
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN:7d
+      PORT:                  5000
+      NODE_ENV:              development
+      FRONTEND_URL:          http://localhost:3000
+      MOCK_SMS:              "true"
+    ports:
+      - "5000:5000"
+
+  # ── Frontend ─────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: auth_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      REACT_APP_API_URL: http://localhost:5000
+    ports:
+      - "3000:3000"
+
+volumes:
+  pg_data:
